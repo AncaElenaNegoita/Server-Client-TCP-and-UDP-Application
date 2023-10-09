@@ -1,0 +1,79 @@
+# Copyright Negoita Anca-Elena, 321 CA
+# Client-Server-Application
+
+1. Structures used.
+- to retain information about customers, a client structure is used
+    - active - keeps 1 if client is connected and 0 Otherwise
+    - id - keeps the id of the current client
+    - topic_message_list - keeps the messages sent to the client if sf = 1 and
+                           the client is disconnected 
+    - sock - keeps the socket where the client is currently connected
+
+- to retain information about a TCP packet, chat_packet is used
+    - len - length of the message
+    - message - the message sent through the connection
+    - sf - int variable that stores if the client wants to receive messages
+           also offline
+
+2. The server
+- the server opens a socket for the UDP client (on which it receives
+datagrams) and for TCP, on which it can accept connections from clients;
+- the server can also receive commands from the keyboard(exit)
+- each sockfd that is opened is added to the set of reading descriptor files,
+along with the descriptor file for STDIN;
+- to control the descriptors at the same time, poll is used and waits for an
+event
+     - if the STDIN file descriptor is among the selected ones, read the input
+     and check if the received command is "exit". If so, close all connections,
+     inform the clients to also close the sockets and exit the program.
+     - if the selected socket is the one on which connections are received, it
+     means that the server has received a request from a new client
+         - first, it is verified if the client is already connected using the
+         ID received in the packet. If so, show a suggestive message and close
+         the new opened socket
+         - after that, it is verified if the client was connected beforein which
+         case the fields active and sock are modified to show the new changes
+         (that now he is connected). Also, if he has received messages offline, 
+         he will receive them in this step.
+         - if the client wasn't connected before, a new entry is created in the
+         vector of clients
+         - then, it creates a new socket for it and adds it to the list of
+         read descriptors
+     - if the selected socket is the one intended for the UDP client, it means
+     that the received data needsto be trasnformed for TCP
+         - it receives the information and stores them in 3 fields (topic,
+         data_type and contents) and then transform it into a message that
+         the client can recognize (data_type is transformed in string, the
+         port and ID for UDP is stored and a specific message is send or stored
+         if the client isn't connected, but subscribed)
+         - if the client is connected and subscribed to the topic, he will
+         automatically receive the message
+     - if one of the client sockets is selected, it means that an already
+     connected client sends a message to the server, and it must act
+         - if the message is a disconnection notification
+             - the client is disconnected by closing the socket, eliminating
+             it from the socket list and setting active field as 0
+         - if the message is a subscription notification
+             - the client's position and sf are added to the topic map in order
+             to have messages send by the topic
+         - if the message is an unsubscribe notification
+             - the client is deleted from the topic map
+
+3. The subscriber
+The subscriber sends the id to the server in order to try and connect
+-  if he receives a packet through the socket, it either received the message
+"exit" proceeds to close the current socket, or shows the message (it stores
+the messages received by the topic while being offline)
+- if the STDIN file descriptor is among the selected ones, it means that an
+action needs to be taken and the outcome sent to the server
+     - if the user wants to exit, the socket is closed
+     - if the user wants to subscribe to a topic, it sends a packet to the
+     server in which it informs about the topic and the sf(if he wants to
+     receive messages while offline). A message is also shown in client
+     - if the user wants to unsubscribe from a topic, it sends a packet to 
+     the server in which it informs about the topic he wants to unsubscribe 
+     from and sf becomes 2 (in order to identify the action)
+
+4. More information
+For sending and receiving the packets, the skel from lab7 PCOM is used and
+each buf is sent or received until no more bytes are remained.
